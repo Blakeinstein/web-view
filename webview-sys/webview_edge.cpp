@@ -132,7 +132,7 @@ public:
         }
 
         if (frameless) {
-            style &= ~(WS_SYSMENU | WS_CAPTION | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
+            style &= (WS_POPUP | WS_DLGFRAME);
         }
 
         // Create window first, because we need the window to get DPI for the window.
@@ -327,7 +327,7 @@ public:
 
         while(MK_LBUTTON) {
             GetCursorPos(&pts);
-            if ((pts.x, pts.y) == (diffpts.x, diffpts.y));
+            if ((pts.x, pts.y) != (diffpts.x, diffpts.y))
             MoveWindow(
                         this->m_window,
                         pts.x + diffpts.x, pts.y + diffpts.y,
@@ -358,13 +358,54 @@ public:
     DWORD saved_style = 0;
     DWORD saved_ex_style = 0;
     RECT saved_rect;
+
+    auto hit_test(POINT cursor, HWND hwnd) const -> LRESULT {
+        const POINT border{
+            ::GetSystemMetrics(SM_CXFRAME) + ::GetSystemMetrics(SM_CXPADDEDBORDER),
+            ::GetSystemMetrics(SM_CYFRAME) + ::GetSystemMetrics(SM_CXPADDEDBORDER)
+        };
+        RECT window;
+        if (!::GetWindowRect(hwnd, &window)) {
+            return HTNOWHERE;
+        }
+
+        const auto drag = true ? HTCAPTION : HTCLIENT;
+
+        enum region_mask {
+            client = 0b0000,
+            left   = 0b0001,
+            right  = 0b0010,
+            top    = 0b0100,
+            bottom = 0b1000,
+        };
+
+        const auto result =
+            left    * (cursor.x <  (window.left   + border.x)) |
+            right   * (cursor.x >= (window.right  - border.x)) |
+            top     * (cursor.y <  (window.top    + border.y)) |
+            bottom  * (cursor.y >= (window.bottom - border.y));
+
+        switch (result) {
+            case left          : return HTLEFT       ;
+            case right         : return HTRIGHT      ;
+            case top           : return HTTOP        ;
+            case bottom        : return HTBOTTOM     ;
+            case top | left    : return HTTOPLEFT    ;
+            case top | right   : return HTTOPRIGHT   ;
+            case bottom | left : return HTBOTTOMLEFT ;
+            case bottom | right: return HTBOTTOMRIGHT;
+            case client        : return drag;
+            default            : return HTNOWHERE;
+        }
+    }
 };
 
 LRESULT CALLBACK WebviewWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     
     LRESULT return_val;
-    auto w = (browser_window*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+    auto w = reinterpret_cast<browser_window*>(::GetWindowLongPtr(hwnd, GWLP_USERDATA));
+    auto& window = *w;
     switch (msg) {
     case WM_SIZE:
         w->resize();
@@ -384,15 +425,12 @@ LRESULT CALLBACK WebviewWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_DESTROY:
         w->exit();
         break;
-    // case WM_NCHITTEST:
-    //     std::cout << HIWORD(lp);
-    //     std::cout << "\n";
-    //     if (HIWORD(lp)<=180) {
-    //         POINTS pts = MAKEPOINTS(lp);
-    //         return HTCAPTION;
-    //     }
-    //     return DefWindowProc(hwnd, WM_NCHITTEST, wp, lp);;
-    //     break;
+    case WM_NCHITTEST:
+        return window.hit_test(POINT{
+                        LOWORD(lp),
+                        HIWORD(lp)
+                    }, hwnd);
+
     default:
         return DefWindowProc(hwnd, msg, wp, lp);
         break;
