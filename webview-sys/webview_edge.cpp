@@ -16,11 +16,13 @@
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Web.UI.Interop.h>
 #include <winrt/Windows.Foundation.Collections.h>
+#include <dwmapi.h>
 
 #pragma comment(lib, "windowsapp.lib")
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "Dwmapi.lib")
 
 // Free result with SysFreeString.
 static inline BSTR webview_to_bstr(const char *s) {
@@ -146,6 +148,8 @@ public:
         if (frameless)
         {
             SetWindowLongPtr(m_window, GWL_STYLE, style);
+            static const MARGINS shadow = {1, 1, 1, 1};
+            DwmExtendFrameIntoClientArea(m_window, &shadow);
         }
         this->saved_style = style;
 
@@ -425,12 +429,12 @@ LRESULT CALLBACK WebviewWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_DESTROY:
         w->exit();
         break;
-    case WM_NCHITTEST:
-        return window.hit_test(POINT{
-                        LOWORD(lp),
-                        HIWORD(lp)
-                    }, hwnd);
-
+    case WM_NCCALCSIZE:
+        if ( true ) {
+            return 0;
+        }
+        break;
+    
     default:
         return DefWindowProc(hwnd, msg, wp, lp);
         break;
