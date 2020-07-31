@@ -135,6 +135,7 @@ public:
 
         if (frameless) {
             style &= (WS_POPUP | WS_DLGFRAME);
+            style &= ~(WS_THICKFRAME | WS_CAPTION);
         }
 
         // Create window first, because we need the window to get DPI for the window.
@@ -150,6 +151,11 @@ public:
             SetWindowLongPtr(m_window, GWL_STYLE, style);
             static const MARGINS shadow = {1, 1, 1, 1};
             DwmExtendFrameIntoClientArea(m_window, &shadow);
+
+            LONG lstyle = GetWindowLong(m_window, GWL_EXSTYLE);
+            lstyle &= ~(WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE);
+            SetWindowLong(m_window, GWL_EXSTYLE, lstyle);
+            
         }
         this->saved_style = style;
 
@@ -175,7 +181,7 @@ public:
 
         // Set position, size and show window *atomically*.
         SetWindowPos(m_window, HWND_TOP, rect.left, rect.top,
-            rect.right - rect.left, rect.bottom - rect.top, SWP_SHOWWINDOW);
+            rect.right - rect.left, rect.bottom - rect.top, SWP_FRAMECHANGED|SWP_SHOWWINDOW);
 
         UpdateWindow(m_window);
         SetFocus(m_window);
@@ -238,7 +244,7 @@ public:
         r.bottom = height;
         AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, 0);
         SetWindowPos(m_window, NULL, r.left, r.top, r.right - r.left, r.bottom - r.top,
-            SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+            SWP_NOZORDER | SWP_NOACTIVATE );
     }
 
     void set_fullscreen(bool fullscreen)
@@ -304,13 +310,13 @@ public:
             SystemParametersInfoW(SPI_GETWORKAREA, 0, &r, 0);
             SetWindowPos(this->m_window, NULL, r.left, r.top, r.right - r.left,
                         r.bottom - r.top,
-                        SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+                        SWP_NOZORDER | SWP_NOACTIVATE);
         } else {
             SetWindowPos(this->m_window, NULL, this->saved_rect.left,
                         this->saved_rect.top,
                         this->saved_rect.right - this->saved_rect.left,
                         this->saved_rect.bottom - this->saved_rect.top,
-                        SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+                        SWP_NOZORDER | SWP_NOACTIVATE);
         }
         
     }
@@ -365,8 +371,8 @@ public:
 
     auto hit_test(POINT cursor, HWND hwnd) const -> LRESULT {
         const POINT border{
-            ::GetSystemMetrics(SM_CXFRAME) + ::GetSystemMetrics(SM_CXPADDEDBORDER),
-            ::GetSystemMetrics(SM_CYFRAME) + ::GetSystemMetrics(SM_CXPADDEDBORDER)
+            4,
+            4
         };
         RECT window;
         if (!::GetWindowRect(hwnd, &window)) {
@@ -429,12 +435,9 @@ LRESULT CALLBACK WebviewWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_DESTROY:
         w->exit();
         break;
-    case WM_NCCALCSIZE:
-        if ( true ) {
-            return 0;
-        }
+    case WM_NCHITTEST:
+        return window.hit_test(POINT{LOWORD(lp), HIWORD(lp)}, hwnd);
         break;
-    
     default:
         return DefWindowProc(hwnd, msg, wp, lp);
         break;
@@ -526,7 +529,7 @@ private:
     {
         RECT r;
         GetClientRect(m_window, &r);
-        Rect bounds(r.left, r.top, r.right - r.left, r.bottom - r.top);
+        Rect bounds(r.left+2, r.top+2, r.right - r.left - 2*2, r.bottom - r.top - 2*2);
         m_webview.Bounds(bounds);
     }
     WebViewControlProcess m_process;
